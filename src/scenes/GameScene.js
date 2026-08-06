@@ -40,6 +40,11 @@ class GameScene {
     this.gameState = 'playing'
     this.stateTimer = 0
     this.levelComplete = false
+
+    // 关卡限时：每关 2 分钟（120 秒）
+    this.levelTimeLimit = 120
+    this.levelTimeRemaining = this.levelTimeLimit
+    this.timeUp = false // 是否因超时结束（用于结算界面提示）
   }
 
   update(dt) {
@@ -73,6 +78,8 @@ class GameScene {
           this.powerUps = []
           this.pendingPowerUp = null
           this.gameState = 'playing'
+          this.levelTimeRemaining = this.levelTimeLimit // 重置下一关倒计时
+          this.timeUp = false
         } else {
           this.callback && this.callback('game:win', { score: this.score })
         }
@@ -91,6 +98,16 @@ class GameScene {
     }
 
     if (this.gameState !== 'playing') return
+
+    // 关卡倒计时：仅在 playing 状态扣减
+    this.levelTimeRemaining -= dt
+    if (this.levelTimeRemaining <= 0) {
+      this.levelTimeRemaining = 0
+      this.timeUp = true
+      this.gameState = 'gameOver'
+      this.stateTimer = 0
+      return
+    }
 
     this.updatePlayer(dt)
     this.updateLevel(dt)
@@ -426,6 +443,9 @@ class GameScene {
     ctx.textAlign = 'right'
     this.drawHPIcons(ctx, this.width - 20, 25, this.player.hp)
 
+    // 关卡倒计时（屏幕顶部中间）
+    this.drawLevelTimer(ctx)
+
     ctx.fillStyle = '#ffffff'
     ctx.font = '14px sans-serif'
     ctx.textAlign = 'left'
@@ -494,6 +514,35 @@ class GameScene {
     ctx.bezierCurveTo(x, y + size, x + size, y + size * 0.7, x + size, y + size * 0.3)
     ctx.bezierCurveTo(x + size, y, x, y, x, y + size * 0.3)
     ctx.fill()
+  }
+
+  /**
+   * 绘制关卡倒计时
+   * - 正常：白色 22px，居中显示在顶部
+   * - 最后 10 秒：字体变大（34px）、变红、闪烁
+   */
+  drawLevelTimer(ctx) {
+    const minutes = Math.floor(this.levelTimeRemaining / 60)
+    const seconds = Math.floor(this.levelTimeRemaining % 60)
+    const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+
+    const isLast10 = this.levelTimeRemaining <= 10
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+
+    if (isLast10) {
+      // 最后 10 秒：字体变大、红色、闪烁（每秒闪 2 次）
+      const flashOn = Math.floor(this.time * 4) % 2 === 0
+      ctx.globalAlpha = flashOn ? 1 : 0.3
+      ctx.fillStyle = '#e74c3c'
+      ctx.font = 'bold 34px sans-serif'
+      ctx.fillText(timeStr, this.width / 2, 55)
+      ctx.globalAlpha = 1
+    } else {
+      ctx.fillStyle = '#ffffff'
+      ctx.font = 'bold 22px sans-serif'
+      ctx.fillText(timeStr, this.width / 2, 55)
+    }
   }
 
   drawLevelComplete(ctx) {
@@ -573,18 +622,27 @@ class GameScene {
     ctx.fillStyle = 'rgba(0,0,0,0.65)'
     ctx.fillRect(0, 0, this.width, this.height)
 
-    DrawUtils.drawText(ctx, '游戏结束', this.width / 2, this.height / 2 - 40, {
+    DrawUtils.drawText(ctx, '游戏结束', this.width / 2, this.height / 2 - 50, {
       color: '#e74c3c',
       fontSize: 48,
       bold: true
     })
 
-    DrawUtils.drawText(ctx, `最终分数: ${this.score}`, this.width / 2, this.height / 2 + 20, {
+    // 超时结束时显示“时间到!”提示
+    if (this.timeUp) {
+      DrawUtils.drawText(ctx, '时间到!', this.width / 2, this.height / 2 - 5, {
+        color: '#f1c40f',
+        fontSize: 24,
+        bold: true
+      })
+    }
+
+    DrawUtils.drawText(ctx, `最终分数: ${this.score}`, this.width / 2, this.height / 2 + 35, {
       color: '#ffffff',
       fontSize: 24
     })
 
-    DrawUtils.drawText(ctx, '返回中...', this.width / 2, this.height / 2 + 60, {
+    DrawUtils.drawText(ctx, '返回中...', this.width / 2, this.height / 2 + 75, {
       color: '#ffffff',
       fontSize: 16
     })

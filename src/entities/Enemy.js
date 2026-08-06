@@ -33,6 +33,11 @@ class Enemy {
     this.maxCoverage = 3    // 达到此数变为大雪球
     this.platform = platform
 
+    // 融化机制参数
+    this.coverTime = 0          // 被冻住后经过的时间
+    this.meltStartTime = 5      // 5秒后开始融化
+    this.meltCompleteTime = 7   // 7秒完全融化
+
     // 参数
     this.walkSpeed = 50
     this.pushSpeed = 300
@@ -104,6 +109,7 @@ class Enemy {
 
   /**
    * 被雪球包裹状态：静止，检测玩家靠近以触发推动
+   * 5秒后开始融化，7秒完全融化恢复行走
    * @param {number} dt - 帧间隔
    * @param {Player} player - 玩家
    * @param {Array} platforms - 平台数组
@@ -112,7 +118,20 @@ class Enemy {
     this.wobble += dt * 4
     this.vx = 0
 
-    if (player) {
+    // 累加冻住时间
+    this.coverTime += dt
+
+    // 7秒完全融化，恢复行走状态
+    if (this.coverTime >= this.meltCompleteTime) {
+      this.state = STATE.WALKING
+      this.snowCoverage = 0
+      this.coverTime = 0
+      // 融化后短暂无敌避免立即被再次冻住
+      return
+    }
+
+    // 检测玩家靠近以触发推动（仅在前5秒未融化时）
+    if (player && this.coverTime < this.meltStartTime) {
       const dx = this.x - player.x
       const dy = Math.abs(this.y - player.y)
       const dist = Math.abs(dx)
@@ -123,6 +142,17 @@ class Enemy {
         this.vx = this.direction * this.pushSpeed
       }
     }
+  }
+
+  /**
+   * 获取当前融化进度（0-1，0=未融化，1=完全融化）
+   * @returns {number}
+   */
+  getMeltProgress() {
+    if (this.state !== STATE.COVERED) return 0
+    if (this.coverTime < this.meltStartTime) return 0
+    return Math.min(1, (this.coverTime - this.meltStartTime) /
+      (this.meltCompleteTime - this.meltStartTime))
   }
 
   /**
@@ -176,6 +206,7 @@ class Enemy {
       this.state = STATE.COVERED
       this.vx = 0
       this.wobble = 0
+      this.coverTime = 0  // 重置冻住计时器
       return true
     }
     return false
@@ -363,31 +394,57 @@ class Enemy {
   }
 
   /**
-   * 渲染被雪球包裹状态
+   * 渲染被雪球包裹状态（含融化动画）
    * @param {CanvasRenderingContext2D} ctx - 渲染上下文
    */
   renderCovered(ctx) {
     const wobble = Math.sin(this.wobble) * 0.1
+    const meltProgress = this.getMeltProgress()  // 0-1
     ctx.save()
     ctx.translate(this.x, this.y)
     ctx.rotate(wobble)
 
-    // 基础身体（红色底色）
+    // 融化时的缩放因子（雪球随融化缩小）
+    const snowScale = 1 - meltProgress * 0.4
+    // 融化时透明度降低
+    const snowAlpha = 1 - meltProgress * 0.6
+
+    // 基础身体（红色底色，融化时逐渐显露）
+    const bodyAlpha = 0.5 + meltProgress * 0.5
+    ctx.globalAlpha = bodyAlpha
     ctx.fillStyle = '#c0392b'
     ctx.beginPath()
     ctx.arc(0, 15, 24, 0, Math.PI * 2)
     ctx.fill()
+    ctx.globalAlpha = 1
 
-    // 雪球逐渐包裹（根据覆盖率变化大小）
+    // 雪球逐渐包裹（根据覆盖率变化大小，融化时缩小）
     const coverageRatio = this.snowCoverage / this.maxCoverage
+    ctx.globalAlpha = snowAlpha
+
+    // 融化时产生水滴效果
+    if (meltProgress > 0) {
+      ctx.fillStyle = 'rgba(150, 200, 230, 0.7)'
+      for (let i = 0; i < 4; i++) {
+        const dropAngle = (this.animTime * 2 + i * Math.PI / 2) % (Math.PI * 2)
+        const dropR = 20 + Math.sin(this.animTime * 3 + i) * 5
+        const dropX = Math.cos(dropAngle) * dropR
+        const dropY = Math.sin(dropAngle) * dropR + meltProgress * 15
+        const dropSize = 2 + meltProgress * 2
+        ctx.beginPath()
+        ctx.arc(dropX, dropY, dropSize, 0, Math.PI * 2)
+        ctx.fill()
+      }
+    }
+
     ctx.fillStyle = '#ffffff'
     ctx.beginPath()
-    ctx.arc(0, 15 - coverageRatio * 20, 24 + coverageRatio * 5, 0, Math.PI * 2)
+    ctx.arc(0, 15 - coverageRatio * 20, (24 + coverageRatio * 5) * snowScale, 0, Math.PI * 2)
     ctx.fill()
 
     ctx.fillStyle = '#ffffff'
     ctx.beginPath()
-    ctx.arc(0, -15, 20 + coverageRatio * 4, 0, Math.PI * 2)
+    ctx.arc(0, -15, (20 + coverageRatio * 4) * snowScale, 0, Math.PI * 2)
     ctx.fill()
 
     ctx.strokeStyle = 'rgba(200, 200, 220, 0.6)'
@@ -409,17 +466,20 @@ class Enemy {
     ctx.closePath()
     ctx.fill()
 
-    // 旋转雪花装饰
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
-    for (let i = 0; i < 3; i++) {
-      const angle = (this.animTime * 3 + i * Math.PI * 2 / 3) % (Math.PI * 2)
-      const sx = Math.cos(angle) * (20 + coverageRatio * 4)
-      const sy = Math.sin(angle) * (20 + coverageRatio * 4)
-      ctx.beginPath()
-      ctx.arc(sx, sy, 3, 0, Math.PI * 2)
-      ctx.fill()
+    // 旋转雪花装饰（融化时消失）
+    if (meltProgress < 1) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * (1 - meltProgress)})`
+      for (let i = 0; i < 3; i++) {
+        const angle = (this.animTime * 3 + i * Math.PI * 2 / 3) % (Math.PI * 2)
+        const sx = Math.cos(angle) * (20 + coverageRatio * 4) * snowScale
+        const sy = Math.sin(angle) * (20 + coverageRatio * 4) * snowScale
+        ctx.beginPath()
+        ctx.arc(sx, sy, 3, 0, Math.PI * 2)
+        ctx.fill()
+      }
     }
 
+    ctx.globalAlpha = 1
     ctx.restore()
   }
 
