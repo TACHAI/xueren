@@ -106,14 +106,15 @@ class Player {
     this.wobble += dt * (this.isMoving ? 10 : 3)
 
     // 平台碰撞检测
-    this.handlePlatformCollision(platforms)
+    this.handlePlatformCollision(platforms, dt)
   }
 
   /**
    * 处理与平台的碰撞（从上方落到平台）
    * @param {Array} platforms - 平台数组
+   * @param {number} dt - 本帧时长（秒），用于精确回推上一帧位置，避免低帧率穿透
    */
-  handlePlatformCollision(platforms) {
+  handlePlatformCollision(platforms, dt = 0.016) {
     this.onGround = false
 
     for (const platform of platforms) {
@@ -127,7 +128,8 @@ class Player {
       // 检查玩家是否在平台水平范围内
       if (playerRight > rect.x && playerLeft < rect.x + rect.width) {
         // 从上方落到平台上（下落中，底部越过平台顶部）
-        if (this.vy >= 0 && playerBottom > rect.y && playerBottom - this.vy * 0.016 <= rect.y + 5) {
+        // 用真实 dt 回推上一帧底部位置，确保低帧率（dt 较大）下不会穿透平台
+        if (this.vy >= 0 && playerBottom > rect.y && playerBottom - this.vy * dt <= rect.y + 5) {
           this.y = rect.y - this.height / 2
           this.vy = 0
           this.onGround = true

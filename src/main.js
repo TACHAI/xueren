@@ -5,9 +5,11 @@ const StartScene = require('./scenes/StartScene')
 const GameScene = require('./scenes/GameScene')
 const OverScene = require('./scenes/OverScene')
 
-// 屏幕尺寸变量
+// 屏幕尺寸变量（逻辑像素，场景代码均使用逻辑坐标）
 let SCREEN_WIDTH = 375
 let SCREEN_HEIGHT = 667
+// 设备像素比：用于把画布放大到物理像素，保证文字渲染锐利不模糊
+let DPR = 1
 let canvas = null
 let ctx = null
 
@@ -16,6 +18,7 @@ try {
   const screenInfo = wx.getSystemInfoSync()
   SCREEN_WIDTH = screenInfo.windowWidth || screenInfo.screenWidth || 375
   SCREEN_HEIGHT = screenInfo.windowHeight || screenInfo.screenHeight || 667
+  DPR = screenInfo.pixelRatio || 1
 } catch (e) {
   console.warn('getSystemInfoSync failed, using default size:', e)
 }
@@ -23,9 +26,12 @@ try {
 // 初始化 Canvas
 try {
   canvas = wx.createCanvas()
+  // 画布使用物理像素（逻辑尺寸 × DPR），避免高分屏放大模糊
+  canvas.width = SCREEN_WIDTH * DPR
+  canvas.height = SCREEN_HEIGHT * DPR
   ctx = canvas.getContext('2d')
-  canvas.width = SCREEN_WIDTH
-  canvas.height = SCREEN_HEIGHT
+  // 缩放绘图坐标系：后续所有绘制仍按逻辑像素书写
+  ctx.scale(DPR, DPR)
 } catch (e) {
   console.error('canvas init failed:', e)
 }
@@ -42,7 +48,8 @@ const sceneState = {
   current: null,    // 当前场景实例
   type: SCENE.START,
   score: 0,
-  win: false
+  win: false,
+  time: 0           // 整局总耗时（秒）
 }
 
 // 上一帧时间戳
@@ -81,7 +88,8 @@ wx.onTouchStart((e) => {
       } else if (type === 'game:over' || type === 'game:win') {
         sceneState.score = (data && data.score) || 0
         sceneState.win = type === 'game:win' || (data && data.win === true)
-        switchScene(SCENE.OVER, { score: sceneState.score, win: sceneState.win })
+        sceneState.time = (data && data.time) || 0
+        switchScene(SCENE.OVER, { score: sceneState.score, win: sceneState.win, time: sceneState.time })
       } else if (type === 'scene:start') {
         switchScene(SCENE.START)
       } else if (type === 'scene:restart') {

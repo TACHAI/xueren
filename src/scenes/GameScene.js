@@ -36,10 +36,24 @@ class GameScene {
     this.comboCount = 0
     this.comboTimer = 0
     this.callback = null
+    this.totalTime = 0 // 整局游戏总耗时（秒）
 
     this.gameState = 'playing'
     this.stateTimer = 0
     this.levelComplete = false
+
+    // 插屏广告：通关过渡时才创建并展示（懒加载）
+    this.interstitialAd = null
+    this._interstitialShownLevel = -1 // 本局已展示过插屏的关卡索引，-1 表示未展示
+    this.rewardedVideoAd = null
+    this.reviveUsed = false      // 每局限复活一次
+    this.reviveBtnBounds = null  // 复活按钮触摸区域
+    this._adShowing = false
+    this._adLoaded = false
+
+    // 激励视频：进入游戏即创建并预加载，保证通关/死亡时"秒出"
+    // 用异步延迟创建避开进入游戏瞬间的渲染层冲突（黑屏）
+    this._initRewardedVideoAd()
 
     // 关卡限时：每关 2 分钟（120 秒）
     this.levelTimeLimit = 120
@@ -49,6 +63,10 @@ class GameScene {
 
   update(dt) {
     this.time += dt
+    // 累计整局耗时：游戏进行中与关卡间歇均计入
+    if (this.gameState === 'playing' || this.gameState === 'levelComplete') {
+      this.totalTime += dt
+    }
     this.comboTimer -= dt
     if (this.comboTimer <= 0) this.comboCount = 0
 
@@ -81,7 +99,7 @@ class GameScene {
           this.levelTimeRemaining = this.levelTimeLimit // 重置下一关倒计时
           this.timeUp = false
         } else {
-          this.callback && this.callback('game:win', { score: this.score })
+          this.callback && this.callback('game:win', { score: this.score, time: this.totalTime })
         }
       }
       this.updateParticles(dt)
@@ -90,8 +108,21 @@ class GameScene {
 
     if (this.gameState === 'gameOver') {
       this.stateTimer += dt
-      if (this.stateTimer > 2.5) {
-        this.callback && this.callback('game:over', { score: this.score })
+      // 广告观看中：暂停结算倒计时，等待 onClose 回调
+      if (this._adShowing) {
+        this.stateTimer = 0 // 观看期间不计入复活界面停留时长
+        this.updateParticles(dt)
+        return
+      }
+      // 已复活过、广告不可用：直接走自动结算
+      const canRevive = !this.reviveUsed && !this._rewardedFailed && typeof wx !== 'undefined' && !!wx.createRewardedVideoAd
+      if (!canRevive) {
+        if (this.stateTimer > 2.5) {
+          this.callback && this.callback('game:over', { score: this.score, time: this.totalTime })
+        }
+      } else if (this.stateTimer > 30) {
+        // 复活界面最多停留 30 秒，超时自动结算
+        this.callback && this.callback('game:over', { score: this.score, time: this.totalTime })
       }
       this.updateParticles(dt)
       return
@@ -125,7 +156,7 @@ class GameScene {
     const input = this.input.getInput()
     this.player.update(dt, input, this.levelManager.platforms)
 
-    const levelWidth = 900
+    const levelWidth = this.levelManager.width
     const minX = this.player.width / 2
     const maxX = levelWidth - this.player.width / 2
     if (this.player.x < minX) this.player.x = minX
@@ -317,7 +348,7 @@ class GameScene {
     this.targetCameraY = targetY
     this.cameraY += (this.targetCameraY - this.cameraY) * 0.12
 
-    const levelWidth = 900
+    const levelWidth = this.levelManager.width
     const maxCameraX = Math.max(0, levelWidth - this.width)
     const targetX = Math.max(0, Math.min(this.player.x - this.width * 0.4, maxCameraX))
     this.targetCameraX = targetX
@@ -331,6 +362,22 @@ class GameScene {
       this.stateTimer = 0
       this.score += 200
       this.spawnLevelClearPowerUp()
+
+      // 前 3 关通关：过渡画面刚出现即展示插屏广告（利用 2.8 秒过渡作为加载/展示窗口）
+      // currentLevel 为刚完成的关卡索引（0/1/2 = 第 1/2/3 关）；每关仅展示一次
+      if (
+        this.levelManager.currentLevel < 3 &&
+        !this.levelManager.isLastLevel() &&
+        this._interstitialShownLevel !== this.levelManager.currentLevel
+      ) {
+        this._interstitialShownLevel = this.levelManager.currentLevel
+        const ad = this.ensureInterstitialAd()
+        if (ad) {
+          ad.show().catch((err) => {
+            console.error('插屏广告显示失败', err)
+          })
+        }
+      }
     }
   }
 
@@ -376,7 +423,7 @@ class GameScene {
   }
 
   drawWorld(ctx) {
-    const levelWidth = 900
+    const levelWidth = this.levelManager.width
     DrawUtils.drawBackground(ctx, levelWidth, this.height + 300)
 
     ctx.fillStyle = 'rgba(255,255,255,0.3)'
@@ -429,7 +476,7 @@ class GameScene {
     ctx.fillRect(0, 0, this.width, 80)
 
     ctx.fillStyle = '#ffffff'
-    ctx.font = 'bold 18px sans-serif'
+    DrawUtils.setFont(ctx, 18, true)
     ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
     const levelNum = this.levelManager.currentLevel + 1
@@ -437,7 +484,7 @@ class GameScene {
 
     ctx.fillStyle = '#f1c40f'
     ctx.textAlign = 'center'
-    ctx.font = 'bold 20px sans-serif'
+    DrawUtils.setFont(ctx, 20, true)
     ctx.fillText(`分数: ${this.score}`, this.width / 2, 25)
 
     ctx.textAlign = 'right'
@@ -447,7 +494,7 @@ class GameScene {
     this.drawLevelTimer(ctx)
 
     ctx.fillStyle = '#ffffff'
-    ctx.font = '14px sans-serif'
+    DrawUtils.setFont(ctx, 14)
     ctx.textAlign = 'left'
     const remaining = this.levelManager.enemies.filter(e => e.state !== 'dead').length
     const covered = this.levelManager.enemies.filter(e => e.state === 'covered' || e.state === 'pushed').length
@@ -485,12 +532,12 @@ class GameScene {
     const cy = 58
     for (let i = items.length - 1; i >= 0; i--) {
       const it = items[i]
-      ctx.font = '16px sans-serif'
+      DrawUtils.setFont(ctx, 16)
       ctx.fillStyle = it.color
       ctx.fillText(it.icon, cx, cy)
       cx -= 20
       ctx.fillStyle = '#ffffff'
-      ctx.font = '12px sans-serif'
+      DrawUtils.setFont(ctx, 12)
       ctx.fillText(`x${it.count}`, cx, cy)
       cx -= 26
     }
@@ -535,12 +582,12 @@ class GameScene {
       const flashOn = Math.floor(this.time * 4) % 2 === 0
       ctx.globalAlpha = flashOn ? 1 : 0.3
       ctx.fillStyle = '#e74c3c'
-      ctx.font = 'bold 34px sans-serif'
+      DrawUtils.setFont(ctx, 34, true)
       ctx.fillText(timeStr, this.width / 2, 55)
       ctx.globalAlpha = 1
     } else {
       ctx.fillStyle = '#ffffff'
-      ctx.font = 'bold 22px sans-serif'
+      DrawUtils.setFont(ctx, 22, true)
       ctx.fillText(timeStr, this.width / 2, 55)
     }
   }
@@ -587,7 +634,7 @@ class GameScene {
       ctx.lineWidth = 2
       ctx.stroke()
       ctx.fillStyle = '#ffffff'
-      ctx.font = 'bold 28px sans-serif'
+      DrawUtils.setFont(ctx, 28, true)
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(info.icon, 0, 1)
@@ -642,14 +689,182 @@ class GameScene {
       fontSize: 24
     })
 
-    DrawUtils.drawText(ctx, '返回中...', this.width / 2, this.height / 2 + 75, {
-      color: '#ffffff',
-      fontSize: 16
+    // 可复活：显示观看广告复活按钮；否则显示自动返回提示
+    if (!this.reviveUsed && !this._rewardedFailed && typeof wx !== 'undefined' && !!wx.createRewardedVideoAd) {
+      const btnW = 220
+      const btnH = 50
+      const btnX = (this.width - btnW) / 2
+      const btnY = this.height / 2 + 70
+      this.reviveBtnBounds = { x: btnX, y: btnY, width: btnW, height: btnH }
+      DrawUtils.drawButton(ctx, this.width / 2, btnY + btnH / 2, btnW, btnH, '观看广告复活', {
+        bgColor: '#2ecc71',
+        fontSize: 20
+      })
+    } else {
+      this.reviveBtnBounds = null
+      DrawUtils.drawText(ctx, '返回中...', this.width / 2, this.height / 2 + 75, {
+        color: '#ffffff',
+        fontSize: 16
+      })
+    }
+  }
+
+  /**
+   * 懒加载创建插屏广告实例，创建后立即预加载素材，保证过渡画面出现即可秒出
+   */
+  ensureInterstitialAd() {
+    if (this.interstitialAd || this._interstitialFailed) return this.interstitialAd
+    try {
+      if (typeof wx !== 'undefined' && wx.createInterstitialAd) {
+        this.interstitialAd = wx.createInterstitialAd({
+          adUnitId: 'adunit-b17748fe89535e8b'
+        })
+        // 预加载素材，缩短展示等待
+        this.interstitialAd.load && this.interstitialAd.load().catch(() => {})
+      } else {
+        this._interstitialFailed = true
+      }
+    } catch (e) {
+      console.error('插屏广告初始化失败', e)
+      this._interstitialFailed = true
+      this.interstitialAd = null
+    }
+    return this.interstitialAd
+  }
+
+  /**
+   * 进入游戏时异步创建激励视频并预加载，保证需要展示时"秒出"。
+   * 延迟一帧创建，避开进入游戏瞬间的渲染层冲突（黑屏）。
+   */
+  _initRewardedVideoAd() {
+    const create = () => {
+      if (this.rewardedVideoAd || this._rewardedFailed) return
+      try {
+        if (typeof wx === 'undefined' || !wx.createRewardedVideoAd) {
+          this._rewardedFailed = true
+          return
+        }
+        const ad = wx.createRewardedVideoAd({
+          adUnitId: 'adunit-16adc4568c95088b'
+        })
+        this.rewardedVideoAd = ad
+        // 素材拉取成功：标记可用，实现秒出
+        ad.onLoad && ad.onLoad(() => { this._adLoaded = true })
+        ad.onError && ad.onError((err) => {
+          console.error('激励视频加载失败', err)
+          this._adLoaded = false
+        })
+        // 广告关闭回调：完整观看则复活，中途关闭不复活
+        ad.onClose((res) => {
+          this._adShowing = false
+          if (res && res.isEnded) {
+            this.revive()
+          } else {
+            // 未看完：下次展示前重新拉取素材
+            ad.load && ad.load().catch(() => {})
+          }
+        })
+        // 预加载素材
+        ad.load && ad.load().then(() => { this._adLoaded = true }).catch(() => { this._adLoaded = false })
+      } catch (e) {
+        console.error('激励视频广告初始化失败', e)
+        this._rewardedFailed = true
+        this.rewardedVideoAd = null
+      }
+    }
+    // 延迟一帧，避免与首帧渲染冲突
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => requestAnimationFrame(create))
+    } else {
+      create()
+    }
+  }
+
+  /**
+   * 懒加载兜底：进入时尚未创建成功时，首次需要展示再创建
+   */
+  ensureRewardedVideoAd() {
+    if (this.rewardedVideoAd || this._rewardedFailed) return this.rewardedVideoAd
+    try {
+      if (typeof wx !== 'undefined' && wx.createRewardedVideoAd) {
+        const ad = wx.createRewardedVideoAd({
+          adUnitId: 'adunit-16adc4568c95088b'
+        })
+        this.rewardedVideoAd = ad
+        ad.onClose((res) => {
+          this._adShowing = false
+          if (res && res.isEnded) {
+            this.revive()
+          } else {
+            // 未看完：重置广告状态，下次展示前重新拉取素材
+            ad.load && ad.load().catch(() => {})
+          }
+        })
+      } else {
+        this._rewardedFailed = true
+      }
+    } catch (e) {
+      console.error('激励视频广告初始化失败', e)
+      this._rewardedFailed = true
+      this.rewardedVideoAd = null
+    }
+    return this.rewardedVideoAd
+  }
+
+  /**
+   * 触发激励视频广告，完整观看后复活（每局限一次）。
+   * 注意：点击时仅标记 _adShowing 暂停结算，看完广告才真正置 reviveUsed 并复活，
+   * 避免"看完广告却从第一关重新开始"。
+   */
+  showReviveAd() {
+    const ad = this.ensureRewardedVideoAd()
+    if (this.reviveUsed || !ad || this._adShowing) return
+    this._adShowing = true
+    // 已预加载：直接秒出；否则走 load->show 重试链
+    ad.show().catch(() => {
+      ad.load()
+        .then(() => ad.show())
+        .catch((err) => {
+          console.error('激励视频广告显示失败', err)
+          // 展示失败：恢复为可复活等待状态，由超时兜底结算
+          this._adShowing = false
+        })
     })
+  }
+
+  /**
+   * 完整观看广告后的复活逻辑
+   */
+  revive() {
+    this._adShowing = false
+    this.reviveUsed = true     // 看完广告才真正消耗复活机会
+    this.reviveBtnBounds = null
+    this.player.hp = this.player.maxHp
+    this.player.invincible = 3 // 复活后 3 秒无敌
+    this.player.vx = 0
+    this.player.vy = 0
+    // 坠落死亡：把玩家放回关卡出生点，避免复活后立即再次坠落
+    if (this.player.y > this.height) {
+      const ps = this.levelManager.playerStart || { x: 60, y: 540 }
+      this.player.x = ps.x
+      this.player.y = ps.y
+    }
+    this.timeUp = false
+    this.gameState = 'playing'
   }
 
   onTouchStart(touch, callback) {
     this.callback = callback
+    // gameOver 状态下优先检测复活按钮点击
+    if (this.gameState === 'gameOver' && this.reviveBtnBounds) {
+      const b = this.reviveBtnBounds
+      const tx = touch.clientX !== undefined ? touch.clientX : touch.x
+      const ty = touch.clientY !== undefined ? touch.clientY : touch.y
+      if (tx >= b.x && tx <= b.x + b.width && ty >= b.y && ty <= b.y + b.height) {
+        this.showReviveAd()
+        return
+      }
+    }
     this.input.onTouchStart(touch)
   }
 

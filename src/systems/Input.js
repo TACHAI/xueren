@@ -1,6 +1,8 @@
 // 雪人打怪兽 - 输入系统
 // 虚拟按键控制：左、右、跳、射
 
+const DrawUtils = require('../utils/Draw')
+
 class InputSystem {
   constructor() {
     // 按键状态
@@ -199,10 +201,10 @@ class InputSystem {
 
     // 按钮文字
     ctx.fillStyle = '#ffffff'
-    ctx.font = 'bold 24px sans-serif'
+    DrawUtils.setFont(ctx, 24, true)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(text, btn.x, btn.y)
+    ctx.fillText(text, Math.round(btn.x), Math.round(btn.y))
   }
 }
 

@@ -409,16 +409,16 @@ class Enemy {
     // 融化时透明度降低
     const snowAlpha = 1 - meltProgress * 0.6
 
-    // 基础身体（红色底色，融化时逐渐显露）
+    // 基础身体（红色底色，融化时逐渐显露），与雪球同心
     const bodyAlpha = 0.5 + meltProgress * 0.5
     ctx.globalAlpha = bodyAlpha
     ctx.fillStyle = '#c0392b'
     ctx.beginPath()
-    ctx.arc(0, 15, 24, 0, Math.PI * 2)
+    ctx.arc(0, 0, 24, 0, Math.PI * 2)
     ctx.fill()
     ctx.globalAlpha = 1
 
-    // 雪球逐渐包裹（根据覆盖率变化大小，融化时缩小）
+    // 雪球包裹：单个圆球（不再是葫芦状双圆），大小随覆盖率与融化变化
     const coverageRatio = this.snowCoverage / this.maxCoverage
     ctx.globalAlpha = snowAlpha
 
@@ -437,42 +437,43 @@ class Enemy {
       }
     }
 
+    // 单个雪球主体：球心位于敌人中心，半径随覆盖率增大、随融化缩小
+    const ballR = (24 + coverageRatio * 6) * snowScale
     ctx.fillStyle = '#ffffff'
     ctx.beginPath()
-    ctx.arc(0, 15 - coverageRatio * 20, (24 + coverageRatio * 5) * snowScale, 0, Math.PI * 2)
+    ctx.arc(0, 0, ballR, 0, Math.PI * 2)
     ctx.fill()
 
-    ctx.fillStyle = '#ffffff'
-    ctx.beginPath()
-    ctx.arc(0, -15, (20 + coverageRatio * 4) * snowScale, 0, Math.PI * 2)
-    ctx.fill()
-
+    // 雪球边缘描边
     ctx.strokeStyle = 'rgba(200, 200, 220, 0.6)'
     ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.arc(0, 0, ballR, 0, Math.PI * 2)
     ctx.stroke()
 
-    // 犄角露在外面（火焰恶魔标志）
+    // 犄角露在雪球外（火焰恶魔标志），位置随球半径上移
     ctx.fillStyle = '#2c3e50'
+    const hornY = -ballR
     ctx.beginPath()
-    ctx.moveTo(-12, -32)
-    ctx.lineTo(-18, -45)
-    ctx.lineTo(-8, -35)
+    ctx.moveTo(-12, hornY + 4)
+    ctx.lineTo(-18, hornY - 9)
+    ctx.lineTo(-8, hornY + 1)
     ctx.closePath()
     ctx.fill()
     ctx.beginPath()
-    ctx.moveTo(12, -32)
-    ctx.lineTo(18, -45)
-    ctx.lineTo(8, -35)
+    ctx.moveTo(12, hornY + 4)
+    ctx.lineTo(18, hornY - 9)
+    ctx.lineTo(8, hornY + 1)
     ctx.closePath()
     ctx.fill()
 
-    // 旋转雪花装饰（融化时消失）
+    // 旋转雪花装饰（融化时消失），环绕雪球
     if (meltProgress < 1) {
       ctx.fillStyle = `rgba(255, 255, 255, ${0.9 * (1 - meltProgress)})`
       for (let i = 0; i < 3; i++) {
         const angle = (this.animTime * 3 + i * Math.PI * 2 / 3) % (Math.PI * 2)
-        const sx = Math.cos(angle) * (20 + coverageRatio * 4) * snowScale
-        const sy = Math.sin(angle) * (20 + coverageRatio * 4) * snowScale
+        const sx = Math.cos(angle) * ballR
+        const sy = Math.sin(angle) * ballR
         ctx.beginPath()
         ctx.arc(sx, sy, 3, 0, Math.PI * 2)
         ctx.fill()

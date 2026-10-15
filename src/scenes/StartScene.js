@@ -165,7 +165,7 @@ class StartScene {
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillStyle = '#ffffff'
-    ctx.font = 'bold 15px sans-serif'
+    DrawUtils.setFont(ctx, 15, true)
     ctx.fillText('操作', leftX, topY)
     ctx.fillText('目标', rightX, topY)
 
@@ -183,16 +183,16 @@ class StartScene {
       ctx.arc(leftX, y, 18, 0, Math.PI * 2)
       ctx.fill()
       ctx.fillStyle = '#ecf0f1'
-      ctx.font = 'bold 18px sans-serif'
+      DrawUtils.setFont(ctx, 18, true)
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(items[i].icon, leftX, y)
 
       ctx.fillStyle = '#ffffff'
-      ctx.font = 'bold 14px sans-serif'
+      DrawUtils.setFont(ctx, 14, true)
       ctx.fillText(items[i].label, leftX, y + 30)
       ctx.fillStyle = '#95a5a6'
-      ctx.font = '12px sans-serif'
+      DrawUtils.setFont(ctx, 12)
       ctx.fillText(items[i].desc, leftX, y + 48)
     }
 
@@ -209,23 +209,23 @@ class StartScene {
       ctx.arc(rightX, y, 18, 0, Math.PI * 2)
       ctx.fill()
       ctx.fillStyle = '#ecf0f1'
-      ctx.font = 'bold 16px sans-serif'
+      DrawUtils.setFont(ctx, 16, true)
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(goalItems[i].icon, rightX, y)
 
       ctx.fillStyle = '#ffffff'
-      ctx.font = 'bold 14px sans-serif'
+      DrawUtils.setFont(ctx, 14, true)
       ctx.fillText(goalItems[i].label, rightX, y + 30)
       ctx.fillStyle = '#95a5a6'
-      ctx.font = '12px sans-serif'
+      DrawUtils.setFont(ctx, 12)
       ctx.fillText(goalItems[i].desc, rightX, y + 48)
     }
 
     // --- 下方：道具和关卡 ---
     const bottomY = panelY + panelH - 115
     ctx.fillStyle = '#f1c40f'
-    ctx.font = 'bold 14px sans-serif'
+    DrawUtils.setFont(ctx, 14, true)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText('道具系统（通关后随机获得）', colX, bottomY)
@@ -245,11 +245,11 @@ class StartScene {
       DrawUtils.roundRectPath(ctx, x - pw / 2, powerY - 24, pw, 48, 10)
       ctx.fill()
       ctx.fillStyle = '#ffffff'
-      ctx.font = 'bold 14px sans-serif'
+      DrawUtils.setFont(ctx, 14, true)
       ctx.textAlign = 'center'
       ctx.fillText(powers[i].icon + powers[i].name, x, powerY - 6)
       ctx.fillStyle = '#ffffff'
-      ctx.font = '11px sans-serif'
+      DrawUtils.setFont(ctx, 11)
       ctx.fillText(powers[i].unlock, x, powerY + 12)
     }
 

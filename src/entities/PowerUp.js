@@ -1,6 +1,8 @@
 // 雪人打怪兽 - 道具系统
 // 三种道具：巨雪球、速射、疾风
 
+const DrawUtils = require('../utils/Draw')
+
 // 道具类型枚举
 const POWERUP_TYPE = {
   BIG_SNOW: 'bigSnow',      // 巨雪球
@@ -172,7 +174,7 @@ class PowerUp {
 
     // 图标文字
     ctx.fillStyle = '#ffffff'
-    ctx.font = 'bold 22px sans-serif'
+    DrawUtils.setFont(ctx, 22, true)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillText(info.icon, 0, 1)

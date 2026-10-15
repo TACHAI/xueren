@@ -1,4 +1,18 @@
 const DrawUtils = {
+  // 统一字体栈：优先清晰的中文字体，避免泛 sans-serif 在不同机型上回落到细笔画字体
+  FONT_FAMILY: '"PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif',
+
+  /**
+   * 统一设置文字字体（所有 fillText 必须经过此方法，保证字体栈一致）
+   * 小字号（<14px）自动加粗，保证细笔画在高分屏上清晰可辨
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} fontSize - 字号（逻辑像素）
+   * @param {boolean} bold - 是否加粗
+   */
+  setFont(ctx, fontSize, bold = false) {
+    const effectiveBold = bold || fontSize < 14
+    ctx.font = `${effectiveBold ? 'bold ' : ''}${fontSize}px ${this.FONT_FAMILY}`
+  },
   drawSnowman(ctx, x, y, scale = 1, options = {}) {
     const {
       bodyColor = '#ffffff',
@@ -220,10 +234,10 @@ const DrawUtils = {
     ctx.fill()
 
     ctx.fillStyle = '#ffffff'
-    ctx.font = 'bold 12px sans-serif'
+    this.setFont(ctx, 12, true)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(`${label} ${Math.ceil(hp)}/${maxHp}`, x, y + height / 2)
+    ctx.fillText(`${label} ${Math.ceil(hp)}/${maxHp}`, Math.round(x), Math.round(y + height / 2))
     ctx.restore()
   },
 
@@ -286,10 +300,10 @@ const DrawUtils = {
     ctx.shadowColor = 'transparent'
 
     ctx.fillStyle = textColor
-    ctx.font = `bold ${fontSize}px sans-serif`
+    this.setFont(ctx, fontSize, true)
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText(text, x, y)
+    ctx.fillText(text, Math.round(x), Math.round(y))
     ctx.restore()
   },
 
@@ -300,21 +314,26 @@ const DrawUtils = {
       bold = false,
       align = 'center',
       alpha = 1,
-      shadow = true
+      shadow
     } = options
+
+    // 清晰度策略：小字号（<14px）默认关闭模糊阴影并加粗，保证边缘锐利；
+    // 大字号保留柔和阴影增强层次感。shadow 参数可显式覆盖。
+    const useShadow = shadow !== undefined ? shadow : fontSize >= 14
 
     ctx.save()
     ctx.globalAlpha = alpha
-    if (shadow) {
+    if (useShadow) {
       ctx.shadowColor = 'rgba(0,0,0,0.5)'
-      ctx.shadowBlur = 4
-      ctx.shadowOffsetY = 2
+      ctx.shadowBlur = 3
+      ctx.shadowOffsetY = 1
     }
     ctx.fillStyle = color
-    ctx.font = `${bold ? 'bold ' : ''}${fontSize}px sans-serif`
+    this.setFont(ctx, fontSize, bold)
     ctx.textAlign = align
     ctx.textBaseline = 'middle'
-    ctx.fillText(text, x, y)
+    // 坐标取整，避免亚像素渲染导致文字发虚
+    ctx.fillText(text, Math.round(x), Math.round(y))
     ctx.restore()
   }
 }
