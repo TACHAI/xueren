@@ -1,20 +1,11 @@
 # 雪人打怪兽 (Snowman vs Monsters)
 
 一款基于微信小游戏平台的横版射击游戏，玩家控制雪人战士，通过喷射雪球、推动雪团消灭火焰恶魔等怪物，完成 8 个关卡的挑战。
+游戏已经上线了，微信小程序搜索    雪人打怪兽
+或者微信扫下面的小程序码
+<img width="258" height="258" alt="gh_ddabb066eacc_258 (1)" src="https://github.com/user-attachments/assets/ba14a2df-e276-4002-9e87-d775d1a461f5" />
 
-## 游戏截图
 
-### 开始界面
-![开始界面](<img width="694" height="1286" alt="68bacd502d22cdbca987740618dd71eb" src="https://github.com/user-attachments/assets/31dd31fc-de18-409f-a54c-08d0f8bbb206" />
-)
-
-### 玩法说明
-![玩法说明](<img width="734" height="1276" alt="45d1f03a92105b0f6cea89e3e7bd2abd" src="https://github.com/user-attachments/assets/70a6fdc9-9c8c-4beb-aad5-d1836dc279dd" />
-)
-
-### 游戏画面
-![游戏画面](<img width="760" height="1350" alt="1428e316f5a37506e8dede5ded413915" src="https://github.com/user-attachments/assets/22d56318-f851-47cd-9c1e-4b5090d84c5e" />
-)
 
 ## 玩法介绍
 
